@@ -18,7 +18,7 @@
             justify-content: center; 
             align-items: center; 
             min-height: 100vh;
-            min-height: 100dvh; /* Ignores mobile browser URL bars */
+            min-height: 100dvh; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
@@ -31,6 +31,7 @@
             border-radius: 12px;
             overflow: hidden; 
             box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+            transition: transform 0.3s ease;
         }
 
         /* NATIVE FULLSCREEN */
@@ -56,6 +57,21 @@
             flex-direction: column;
         }
 
+        /* --- iOS FORCED LANDSCAPE ROTATION FALLBACK --- */
+        /* If the device is in portrait mode AND the user triggers ios-fullscreen, rotate the container 90 degrees */
+        @media screen and (orientation: portrait) {
+            .video-container.ios-fullscreen {
+                /* Swap width and height for rotation */
+                width: 100dvh;
+                height: 100vw;
+                /* Rotate it and snap it to the top-left origin */
+                transform: rotate(90deg);
+                transform-origin: top left;
+                /* Move it back into the visible screen area */
+                left: 100vw;
+            }
+        }
+
         /* UI FADE ANIMATIONS */
         .autohide-ui {
             transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -71,7 +87,7 @@
             position: absolute;
             top: max(15px, env(safe-area-inset-top));
             left: max(15px, env(safe-area-inset-left));
-            z-index: 40; /* High z-index to stay above touch layer */
+            z-index: 40; 
             width: 44px;
             height: 44px;
             background: rgba(0, 0, 0, 0.65);
@@ -136,7 +152,7 @@
             cursor: pointer;
         }
 
-        /* CONTROL BAR (DESKTOP/TABLET DEFAULT) */
+        /* CONTROL BAR */
         .custom-controls {
             display: flex;
             align-items: center;
@@ -192,20 +208,20 @@
             .brand-logo { width: 90px; }
             
             .custom-controls { 
-                flex-wrap: wrap; /* Allows items to flow to a new line */
+                flex-wrap: wrap; 
                 padding: 10px; 
                 gap: 8px; 
             }
             
             .progress-bar { 
-                flex: 1 1 100%; /* Forces the progress bar to take up the entire top row */
-                order: -1;      /* Moves the progress bar above the buttons */
+                flex: 1 1 100%; 
+                order: -1;      
                 margin-bottom: 5px;
                 width: 100%;
             }
             
             .time-display { 
-                flex-grow: 1; /* Pushes the speed and full buttons cleanly to the right */
+                flex-grow: 1; 
                 text-align: left; 
                 font-size: 12px; 
                 padding-left: 5px;
@@ -220,17 +236,14 @@
 
     <div class="video-container" id="video-container">
         
-        <!-- UI Elements that will Auto-Hide -->
         <button class="back-btn autohide-ui" id="back-btn">
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
-        <!-- Use your transparent .png logo here -->
         <img src="my-logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
-            <!-- Invisible Touch Target -->
             <div id="touch-overlay"></div>
         </div>
         
@@ -240,7 +253,6 @@
                 <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
             </div>
             
-            <!-- Mobile Fix: This bar moves to the top row automatically on small screens -->
             <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
             
             <select id="speed-control" class="speed-control">
@@ -262,14 +274,15 @@
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
         var player, timeUpdater, idleTimer;
-        var isUIHidden = false; // Tracks if controls are currently invisible
+        var isUIHidden = false; 
         var uiElements = document.querySelectorAll('.autohide-ui');
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
                 videoId: 'yWgHx0HE8m8',
                 playerVars: { 
-                    'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1 
+                    'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1,
+                    'origin': window.location.origin
                 },
                 events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }
             });
@@ -288,25 +301,23 @@
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
-            // Toggle Play/Pause
             function togglePlay() {
-                if (player.getPlayerState() === YT.PlayerState.PLAYING) {
-                    player.pauseVideo();
-                } else {
-                    player.playVideo();
+                if (player && typeof player.getPlayerState === 'function') {
+                    if (player.getPlayerState() === YT.PlayerState.PLAYING) {
+                        player.pauseVideo();
+                    } else {
+                        player.playVideo();
+                    }
                 }
             }
 
             playPauseBtn.addEventListener('click', togglePlay);
             
-            // TWO-STAGE TOUCH LOGIC
             touchOverlay.addEventListener('click', function() {
                 if (isUIHidden) {
-                    // Tap 1: Wake up the UI, do not pause the video
                     showUI();
                     resetIdleTimer();
                 } else {
-                    // Tap 2: UI is already visible, so toggle play/pause
                     togglePlay();
                     resetIdleTimer();
                 }
@@ -315,7 +326,6 @@
             progressBar.addEventListener('input', function() { player.seekTo(progressBar.value, true); });
             speedControl.addEventListener('change', function() { player.setPlaybackRate(parseFloat(this.value)); });
 
-            // Back Button Logic
             backBtn.addEventListener('click', function() {
                 if (document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('ios-fullscreen')) {
                     exitFullscreen();
@@ -324,25 +334,47 @@
                 if (window.history.length > 1) {
                     window.history.back();
                 } else {
-                    window.location.href = "https://google.com"; // Fallback URL
+                    window.location.href = "https://google.com"; 
                 }
             });
 
-            // Smart Fullscreen Logic
+            // --- ORIENTATION LOCK FUNCTIONS ---
+            function lockLandscape() {
+                if (screen.orientation && screen.orientation.lock) {
+                    // This works on Android Chrome/Edge
+                    screen.orientation.lock('landscape').catch(function(error) {
+                        console.log("Orientation lock not supported or blocked by browser.");
+                    });
+                }
+            }
+
+            function unlockOrientation() {
+                if (screen.orientation && screen.orientation.unlock) {
+                    screen.orientation.unlock();
+                }
+            }
+
             function exitFullscreen() {
+                unlockOrientation(); // Release the lock
+                
                 if (document.exitFullscreen) document.exitFullscreen();
                 else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                
                 videoContainer.classList.remove('ios-fullscreen');
                 fullscreenBtn.innerText = "Full";
             }
 
             fullscreenBtn.addEventListener('click', function() {
                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
+                    
+                    // Enter fullscreen and attempt to force landscape
                     if (videoContainer.requestFullscreen) {
-                        videoContainer.requestFullscreen();
+                        videoContainer.requestFullscreen().then(lockLandscape);
                     } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
+                        lockLandscape();
                     } else {
+                        // iOS Fallback: Applies the CSS rotation class
                         videoContainer.classList.add('ios-fullscreen');
                         fullscreenBtn.innerText = "Exit";
                     }
@@ -352,12 +384,18 @@
             });
 
             var handleFSChange = function() {
-                fullscreenBtn.innerText = (document.fullscreenElement || document.webkitFullscreenElement) ? "Exit" : "Full";
+                var isFS = document.fullscreenElement || document.webkitFullscreenElement;
+                fullscreenBtn.innerText = isFS ? "Exit" : "Full";
+                
+                // If user uses device back button to exit, ensure orientation unlocks
+                if (!isFS) {
+                    unlockOrientation();
+                }
             };
+            
             document.addEventListener('fullscreenchange', handleFSChange);
             document.addEventListener('webkitfullscreenchange', handleFSChange);
 
-            // Keep UI alive when touching controls directly
             document.querySelector('.custom-controls').addEventListener('touchstart', resetIdleTimer, {passive: true});
             document.querySelector('.custom-controls').addEventListener('mousemove', resetIdleTimer);
             
@@ -374,12 +412,11 @@
             showUI();
             clearTimeout(idleTimer);
             
-            // Only hide UI if video is currently playing
-            if (player && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING) {
+            if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING) {
                 idleTimer = setTimeout(() => {
                     uiElements.forEach(el => el.classList.add('hidden'));
                     isUIHidden = true;
-                }, 3500); // UI fades out after 3.5 seconds
+                }, 3500); 
             }
         }
 
@@ -388,12 +425,12 @@
             
             if (event.data === YT.PlayerState.PLAYING) {
                 playPauseBtn.innerText = "Pause";
-                resetIdleTimer(); // Starts the hide countdown
+                resetIdleTimer(); 
                 timeUpdater = setInterval(updateProgressBar, 500);
             } else {
                 playPauseBtn.innerText = "Play";
-                showUI(); // Forces UI to appear
-                clearTimeout(idleTimer); // Stops the UI from hiding while paused
+                showUI(); 
+                clearTimeout(idleTimer); 
                 clearInterval(timeUpdater);
             }
 
@@ -404,8 +441,10 @@
         }
 
         function updateProgressBar() {
-            document.getElementById('progress-bar').value = player.getCurrentTime();
-            document.getElementById('current-time').innerText = formatTime(player.getCurrentTime());
+            if (player && typeof player.getCurrentTime === 'function') {
+                document.getElementById('progress-bar').value = player.getCurrentTime();
+                document.getElementById('current-time').innerText = formatTime(player.getCurrentTime());
+            }
         }
 
         function formatTime(time) {
