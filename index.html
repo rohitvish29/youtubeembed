@@ -17,13 +17,13 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
+            /* 100dvh perfectly centers on mobile, ignoring the URL bar */
             min-height: 100vh;
-            min-height: -webkit-fill-available;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            min-height: 100dvh; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
 
-        /* Container scales fluidly across desktop, tablet, and mobile */
         .video-container {
             position: relative;
             width: 100%;
@@ -34,8 +34,8 @@
             box-shadow: 0 8px 25px rgba(0,0,0,0.7);
         }
 
-        /* Fullscreen handling for mobile & desktop */
-        .video-container:fullscreen {
+        /* NATIVE FULLSCREEN */
+        .video-container:fullscreen, .video-container:-webkit-full-screen {
             width: 100vw;
             height: 100vh;
             max-width: none;
@@ -44,17 +44,30 @@
             flex-direction: column;
         }
 
-        /* iOS WebKit Fullscreen support */
-        .video-container:-webkit-full-screen {
+        /* iOS CSS OVERRIDE FULLSCREEN */
+        .video-container.ios-fullscreen {
+            position: fixed;
+            inset: 0;
             width: 100vw;
-            height: 100vh;
+            height: 100dvh;
             max-width: none;
             border-radius: 0;
+            z-index: 9999;
             display: flex;
             flex-direction: column;
         }
 
-        /* --- BACK BUTTON (TOP-LEFT FOR iOS & ANDROID) --- */
+        /* UI FADE ANIMATIONS */
+        .autohide-ui {
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+        }
+        .autohide-ui.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* BACK BUTTON */
         .back-btn {
             position: absolute;
             top: max(15px, env(safe-area-inset-top));
@@ -71,12 +84,6 @@
             cursor: pointer;
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            transition: background 0.2s, transform 0.2s;
-        }
-
-        .back-btn:active {
-            transform: scale(0.92);
-            background: rgba(229, 9, 20, 0.8);
         }
 
         .back-btn svg {
@@ -85,35 +92,34 @@
             fill: #ffffff;
         }
 
-        /* --- FLOATING LOGO (TOP-RIGHT) --- */
+        /* FLOATING LOGO */
         .brand-logo {
             position: absolute;
             top: max(15px, env(safe-area-inset-top));
             right: max(15px, env(safe-area-inset-right));
             width: 110px;
             max-width: 25vw;
-            opacity: 0.85;
-            z-index: 20;
+            z-index: 30;
             pointer-events: none;
         }
 
-        /* Aspect ratio wrapper */
+        /* VIDEO AREA */
         .iframe-wrapper {
             position: relative;
-            padding-bottom: 56.25%; /* 16:9 ratio */
+            padding-bottom: 56.25%;
             height: 0;
             overflow: hidden; 
             background: #000;
         }
 
         .video-container:fullscreen .iframe-wrapper,
-        .video-container:-webkit-full-screen .iframe-wrapper {
+        .video-container:-webkit-full-screen .iframe-wrapper,
+        .video-container.ios-fullscreen .iframe-wrapper {
             flex-grow: 1;
             padding-bottom: 0;
             height: auto;
         }
 
-        /* YouTube crop & click-blocking shield */
         #player {
             position: absolute;
             top: -80px;  
@@ -123,7 +129,15 @@
             pointer-events: none; 
         }
 
-        /* Custom mobile-friendly control bar */
+        /* INVISIBLE TOUCH LAYER (FOR TAP TO PLAY/PAUSE) */
+        #touch-overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 20;
+            cursor: pointer;
+        }
+
+        /* CONTROL BAR */
         .custom-controls {
             display: flex;
             align-items: center;
@@ -133,8 +147,7 @@
             padding-left: max(16px, env(safe-area-inset-left));
             padding-right: max(16px, env(safe-area-inset-right));
             gap: 12px;
-            z-index: 25;
-            flex-wrap: wrap;
+            z-index: 30;
         }
 
         .control-btn {
@@ -148,13 +161,6 @@
             cursor: pointer;
             font-weight: bold;
             font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .control-btn:active {
-            background: #b20710;
         }
 
         .progress-bar {
@@ -169,7 +175,6 @@
             font-size: 13px;
             min-width: 75px;
             text-align: center;
-            font-variant-numeric: tabular-nums;
         }
 
         .speed-control {
@@ -179,35 +184,16 @@
             height: 38px;
             padding: 0 8px;
             border-radius: 6px;
-            cursor: pointer;
             font-size: 13px;
-            outline: none;
         }
 
-        /* Mobile specific adjustments */
         @media (max-width: 600px) {
-            .video-container {
-                border-radius: 0;
-            }
-            .custom-controls {
-                padding: 8px 10px;
-                gap: 8px;
-            }
-            .brand-logo {
-                width: 90px;
-            }
-            .time-display {
-                font-size: 11px;
-                min-width: 65px;
-            }
-            .speed-control {
-                padding: 0 4px;
-                font-size: 12px;
-            }
-            .control-btn {
-                padding: 0 8px;
-                font-size: 13px;
-            }
+            .video-container { border-radius: 0; }
+            .custom-controls { padding: 8px 10px; gap: 8px; }
+            .brand-logo { width: 90px; }
+            .time-display { font-size: 11px; min-width: 65px; }
+            .speed-control { padding: 0 4px; font-size: 12px; }
+            .control-btn { padding: 0 8px; font-size: 13px; }
         }
     </style>
 </head>
@@ -215,19 +201,18 @@
 
     <div class="video-container" id="video-container">
         
-        <button class="back-btn" id="back-btn" aria-label="Exit Video">
-            <svg viewBox="0 0 24 24">
-                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-            </svg>
+        <button class="back-btn autohide-ui" id="back-btn">
+            <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
-        <img src="my-logo.png" alt="Definite Success" class="brand-logo" id="brand-logo" onerror="this.style.display='none'">
+        <img src="my-logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
+            <div id="touch-overlay"></div>
         </div>
         
-        <div class="custom-controls">
+        <div class="custom-controls autohide-ui">
             <button id="play-pause-btn" class="control-btn">Play</button>
             <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
             <div class="time-display">
@@ -235,7 +220,6 @@
             </div>
             
             <select id="speed-control" class="speed-control">
-                <option value="0.5">0.5x</option>
                 <option value="1" selected>1x</option>
                 <option value="1.25">1.25x</option>
                 <option value="1.5">1.5x</option>
@@ -247,35 +231,29 @@
     </div>
 
     <script>
-        // 1. YouTube API Initialization
+        // 1. Load API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
-        var player;
-        var timeUpdater;
+        var player, timeUpdater, idleTimer;
+        var uiElements = document.querySelectorAll('.autohide-ui');
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
                 videoId: 'yWgHx0HE8m8',
                 playerVars: { 
-                    'controls': 0,
-                    'disablekb': 1,
-                    'modestbranding': 1,
-                    'rel': 0,
-                    'playsinline': 1 /* Keeps video inside web view on iPhones */
+                    'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1 
                 },
-                events: {
-                    'onReady': onPlayerReady,
-                    'onStateChange': onPlayerStateChange
-                }
+                events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }
             });
         }
 
-        // 2. Setup Event Listeners
+        // 2. Setup Interactions
         function onPlayerReady(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
+            var touchOverlay = document.getElementById('touch-overlay');
             var progressBar = document.getElementById('progress-bar');
             var speedControl = document.getElementById('speed-control');
             var fullscreenBtn = document.getElementById('fullscreen-btn');
@@ -285,77 +263,94 @@
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
-            // Play / Pause toggle
-            playPauseBtn.addEventListener('click', function() {
-                var state = player.getPlayerState();
-                if (state === YT.PlayerState.PLAYING) {
+            // Toggle Play/Pause Function
+            function togglePlay() {
+                if (player.getPlayerState() === YT.PlayerState.PLAYING) {
                     player.pauseVideo();
                 } else {
                     player.playVideo();
                 }
+            }
+
+            playPauseBtn.addEventListener('click', togglePlay);
+            touchOverlay.addEventListener('click', function() {
+                togglePlay();
+                resetIdleTimer(); // Wake up UI when touched
             });
 
-            // Seekbar scrub
-            progressBar.addEventListener('input', function() {
-                player.seekTo(progressBar.value, true);
-            });
+            progressBar.addEventListener('input', function() { player.seekTo(progressBar.value, true); });
+            speedControl.addEventListener('change', function() { player.setPlaybackRate(parseFloat(this.value)); });
 
-            // Speed select
-            speedControl.addEventListener('change', function() {
-                player.setPlaybackRate(parseFloat(this.value));
-            });
-
-            // Back Button Handler (Exit/Back functionality)
+            // Back Button Logic
             backBtn.addEventListener('click', function() {
-                // If in fullscreen, exit fullscreen first
-                if (document.fullscreenElement || document.webkitFullscreenElement) {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    }
+                if (document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('ios-fullscreen')) {
+                    exitFullscreen();
                 }
                 
-                // Return to previous page in browser history or close window
                 if (window.history.length > 1) {
                     window.history.back();
                 } else {
-                    window.close();
+                    // Fallback if there is no back history
+                    window.location.href = "https://google.com"; // Change to your app's home link
                 }
             });
 
-            // Fullscreen cross-platform handler
+            // Smart Fullscreen Logic
+            function exitFullscreen() {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                videoContainer.classList.remove('ios-fullscreen');
+                fullscreenBtn.innerText = "Full";
+            }
+
             fullscreenBtn.addEventListener('click', function() {
-                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
+                    // Enter Fullscreen
                     if (videoContainer.requestFullscreen) {
                         videoContainer.requestFullscreen();
-                    } else if (videoContainer.webkitRequestFullscreen) { /* Safari & iOS */
+                    } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
+                    } else {
+                        // iOS Fallback Fullscreen
+                        videoContainer.classList.add('ios-fullscreen');
+                        fullscreenBtn.innerText = "Exit";
                     }
                 } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) { /* Safari & iOS */
-                        document.webkitExitFullscreen();
-                    }
+                    exitFullscreen();
                 }
             });
 
-            // Fullscreen text updater
+            // Fullscreen label updater
             var handleFSChange = function() {
-                if (document.fullscreenElement || document.webkitFullscreenElement) {
-                    fullscreenBtn.innerText = "Exit";
-                } else {
-                    fullscreenBtn.innerText = "Full";
-                }
+                fullscreenBtn.innerText = (document.fullscreenElement || document.webkitFullscreenElement) ? "Exit" : "Full";
             };
-
             document.addEventListener('fullscreenchange', handleFSChange);
             document.addEventListener('webkitfullscreenchange', handleFSChange);
+
+            // Wake up UI on any interaction
+            document.addEventListener('mousemove', resetIdleTimer);
+            document.addEventListener('touchstart', resetIdleTimer);
+            
+            resetIdleTimer(); // Start timer on load
+        }
+
+        // 3. Auto-Hide UI Timer Logic
+        function resetIdleTimer() {
+            // Show all UI
+            uiElements.forEach(el => el.classList.remove('hidden'));
+            clearTimeout(idleTimer);
+            
+            // Only hide UI automatically if video is actively playing
+            if (player && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING) {
+                idleTimer = setTimeout(() => {
+                    uiElements.forEach(el => el.classList.add('hidden'));
+                }, 3000); // Hides after 3 seconds
+            }
         }
 
         function onPlayerStateChange(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
+            resetIdleTimer(); // Wake up UI on state change
             
             if (event.data === YT.PlayerState.PLAYING) {
                 playPauseBtn.innerText = "Pause";
@@ -372,9 +367,8 @@
         }
 
         function updateProgressBar() {
-            var currentTime = player.getCurrentTime();
-            document.getElementById('progress-bar').value = currentTime;
-            document.getElementById('current-time').innerText = formatTime(currentTime);
+            document.getElementById('progress-bar').value = player.getCurrentTime();
+            document.getElementById('current-time').innerText = formatTime(player.getCurrentTime());
         }
 
         function formatTime(time) {
