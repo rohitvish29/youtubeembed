@@ -17,9 +17,8 @@
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            /* 100dvh perfectly centers on mobile, ignoring the URL bar */
             min-height: 100vh;
-            min-height: 100dvh; 
+            min-height: 100dvh; /* Ignores mobile browser URL bars */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
         }
@@ -59,7 +58,7 @@
 
         /* UI FADE ANIMATIONS */
         .autohide-ui {
-            transition: opacity 0.4s ease, visibility 0.4s ease;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
         }
         .autohide-ui.hidden {
             opacity: 0;
@@ -72,7 +71,7 @@
             position: absolute;
             top: max(15px, env(safe-area-inset-top));
             left: max(15px, env(safe-area-inset-left));
-            z-index: 30;
+            z-index: 40; /* High z-index to stay above touch layer */
             width: 44px;
             height: 44px;
             background: rgba(0, 0, 0, 0.65);
@@ -137,7 +136,7 @@
             cursor: pointer;
         }
 
-        /* CONTROL BAR */
+        /* CONTROL BAR (DESKTOP/TABLET DEFAULT) */
         .custom-controls {
             display: flex;
             align-items: center;
@@ -147,7 +146,7 @@
             padding-left: max(16px, env(safe-area-inset-left));
             padding-right: max(16px, env(safe-area-inset-right));
             gap: 12px;
-            z-index: 30;
+            z-index: 40;
         }
 
         .control-btn {
@@ -187,13 +186,33 @@
             font-size: 13px;
         }
 
+        /* === MOBILE FIX: TWO-ROW CONTROL BAR === */
         @media (max-width: 600px) {
             .video-container { border-radius: 0; }
-            .custom-controls { padding: 8px 10px; gap: 8px; }
             .brand-logo { width: 90px; }
-            .time-display { font-size: 11px; min-width: 65px; }
-            .speed-control { padding: 0 4px; font-size: 12px; }
-            .control-btn { padding: 0 8px; font-size: 13px; }
+            
+            .custom-controls { 
+                flex-wrap: wrap; /* Allows items to flow to a new line */
+                padding: 10px; 
+                gap: 8px; 
+            }
+            
+            .progress-bar { 
+                flex: 1 1 100%; /* Forces the progress bar to take up the entire top row */
+                order: -1;      /* Moves the progress bar above the buttons */
+                margin-bottom: 5px;
+                width: 100%;
+            }
+            
+            .time-display { 
+                flex-grow: 1; /* Pushes the speed and full buttons cleanly to the right */
+                text-align: left; 
+                font-size: 12px; 
+                padding-left: 5px;
+            }
+
+            .speed-control { font-size: 12px; padding: 0 4px; }
+            .control-btn { font-size: 13px; padding: 0 8px; }
         }
     </style>
 </head>
@@ -201,23 +220,28 @@
 
     <div class="video-container" id="video-container">
         
+        <!-- UI Elements that will Auto-Hide -->
         <button class="back-btn autohide-ui" id="back-btn">
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
+        <!-- Use your transparent .png logo here -->
         <img src="my-logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
+            <!-- Invisible Touch Target -->
             <div id="touch-overlay"></div>
         </div>
         
         <div class="custom-controls autohide-ui">
             <button id="play-pause-btn" class="control-btn">Play</button>
-            <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
             <div class="time-display">
                 <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
             </div>
+            
+            <!-- Mobile Fix: This bar moves to the top row automatically on small screens -->
+            <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
             
             <select id="speed-control" class="speed-control">
                 <option value="1" selected>1x</option>
@@ -238,6 +262,7 @@
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
         var player, timeUpdater, idleTimer;
+        var isUIHidden = false; // Tracks if controls are currently invisible
         var uiElements = document.querySelectorAll('.autohide-ui');
 
         function onYouTubeIframeAPIReady() {
@@ -263,7 +288,7 @@
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
-            // Toggle Play/Pause Function
+            // Toggle Play/Pause
             function togglePlay() {
                 if (player.getPlayerState() === YT.PlayerState.PLAYING) {
                     player.pauseVideo();
@@ -273,9 +298,18 @@
             }
 
             playPauseBtn.addEventListener('click', togglePlay);
+            
+            // TWO-STAGE TOUCH LOGIC
             touchOverlay.addEventListener('click', function() {
-                togglePlay();
-                resetIdleTimer(); // Wake up UI when touched
+                if (isUIHidden) {
+                    // Tap 1: Wake up the UI, do not pause the video
+                    showUI();
+                    resetIdleTimer();
+                } else {
+                    // Tap 2: UI is already visible, so toggle play/pause
+                    togglePlay();
+                    resetIdleTimer();
+                }
             });
 
             progressBar.addEventListener('input', function() { player.seekTo(progressBar.value, true); });
@@ -290,8 +324,7 @@
                 if (window.history.length > 1) {
                     window.history.back();
                 } else {
-                    // Fallback if there is no back history
-                    window.location.href = "https://google.com"; // Change to your app's home link
+                    window.location.href = "https://google.com"; // Fallback URL
                 }
             });
 
@@ -305,13 +338,11 @@
 
             fullscreenBtn.addEventListener('click', function() {
                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
-                    // Enter Fullscreen
                     if (videoContainer.requestFullscreen) {
                         videoContainer.requestFullscreen();
                     } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
                     } else {
-                        // iOS Fallback Fullscreen
                         videoContainer.classList.add('ios-fullscreen');
                         fullscreenBtn.innerText = "Exit";
                     }
@@ -320,43 +351,49 @@
                 }
             });
 
-            // Fullscreen label updater
             var handleFSChange = function() {
                 fullscreenBtn.innerText = (document.fullscreenElement || document.webkitFullscreenElement) ? "Exit" : "Full";
             };
             document.addEventListener('fullscreenchange', handleFSChange);
             document.addEventListener('webkitfullscreenchange', handleFSChange);
 
-            // Wake up UI on any interaction
-            document.addEventListener('mousemove', resetIdleTimer);
-            document.addEventListener('touchstart', resetIdleTimer);
+            // Keep UI alive when touching controls directly
+            document.querySelector('.custom-controls').addEventListener('touchstart', resetIdleTimer, {passive: true});
+            document.querySelector('.custom-controls').addEventListener('mousemove', resetIdleTimer);
             
-            resetIdleTimer(); // Start timer on load
+            resetIdleTimer();
         }
 
-        // 3. Auto-Hide UI Timer Logic
-        function resetIdleTimer() {
-            // Show all UI
+        // 3. UI Show/Hide Logic
+        function showUI() {
             uiElements.forEach(el => el.classList.remove('hidden'));
+            isUIHidden = false;
+        }
+
+        function resetIdleTimer() {
+            showUI();
             clearTimeout(idleTimer);
             
-            // Only hide UI automatically if video is actively playing
+            // Only hide UI if video is currently playing
             if (player && player.getPlayerState && player.getPlayerState() === YT.PlayerState.PLAYING) {
                 idleTimer = setTimeout(() => {
                     uiElements.forEach(el => el.classList.add('hidden'));
-                }, 3000); // Hides after 3 seconds
+                    isUIHidden = true;
+                }, 3500); // UI fades out after 3.5 seconds
             }
         }
 
         function onPlayerStateChange(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
-            resetIdleTimer(); // Wake up UI on state change
             
             if (event.data === YT.PlayerState.PLAYING) {
                 playPauseBtn.innerText = "Pause";
+                resetIdleTimer(); // Starts the hide countdown
                 timeUpdater = setInterval(updateProgressBar, 500);
             } else {
                 playPauseBtn.innerText = "Play";
+                showUI(); // Forces UI to appear
+                clearTimeout(idleTimer); // Stops the UI from hiding while paused
                 clearInterval(timeUpdater);
             }
 
