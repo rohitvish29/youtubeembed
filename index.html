@@ -3,86 +3,187 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Clean Video Player</title>
+    <title>Definite Success Custom Player</title>
     <style>
-        /* Centers the video and makes the background black */
         body { 
             margin: 0; 
+            background-color: #111; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            height: 100vh; 
-            background-color: #000; 
-        }
-        
-        /* Container that holds the video and the shields */
-        .video-container {
-            position: relative;
-            width: 560px;
-            height: 315px;
+            height: 100vh;
+            font-family: Arial, sans-serif;
         }
 
-        /* INVISIBLE SHIELD 1: Blocks the top title, channel icon, and "More videos" */
-        .shield-top {
+        /* The main player container */
+        .video-container {
+            position: relative;
+            width: 700px;
+            max-width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        /* The 16:9 ratio wrapper */
+        .iframe-wrapper {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+            height: 0;
+            overflow: hidden;
+        }
+
+        /* The YouTube iframe - CRITICAL: pointer-events: none blocks ALL clicks */
+        #player {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            height: 70px;
-            z-index: 10;
+            height: 100%;
+            pointer-events: none; 
         }
 
-        /* INVISIBLE SHIELD 2: Blocks the bottom-right YouTube watermark */
-        .shield-bottom-right {
-            position: absolute;
-            bottom: 30px; /* Sits just above the playbar */
-            right: 0;
-            width: 90px;
-            height: 50px;
-            z-index: 10;
+        /* Our Custom Control Bar */
+        .custom-controls {
+            display: flex;
+            align-items: center;
+            background: #222;
+            padding: 10px 15px;
+            gap: 15px;
+        }
+
+        .play-btn {
+            background: #e50914;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .play-btn:hover {
+            background: #b20710;
+        }
+
+        /* Custom seekbar */
+        .progress-bar {
+            flex-grow: 1;
+            cursor: pointer;
+        }
+
+        .time-display {
+            color: white;
+            font-size: 14px;
+            min-width: 80px;
+            text-align: right;
         }
     </style>
 </head>
 <body>
-    
+
     <div class="video-container">
-        <!-- These empty divs act as glass walls over the clickable YouTube links -->
-        <div class="shield-top"></div>
-        <div class="shield-bottom-right"></div>
+        <!-- Video Area (Unclickable) -->
+        <div class="iframe-wrapper">
+            <div id="player"></div>
+        </div>
         
-        <!-- The actual video player -->
-        <div id="player"></div>
+        <!-- Custom Controls Area -->
+        <div class="custom-controls">
+            <button id="play-pause-btn" class="play-btn">Play</button>
+            <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
+            <div class="time-display">
+                <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+            </div>
+        </div>
     </div>
 
     <script>
+        // 1. Load YouTube IFrame API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
         firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
 
         var player;
+        var timeUpdater;
+
+        // 2. Initialize Player
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
-                height: '315',
-                width: '100%', 
-                videoId: 'yWgHx0HE8m8', // Your video ID is here
+                videoId: 'yWgHx0HE8m8', // Your Video ID
                 playerVars: { 
-                    'rel': 0, 
-                    'playsinline': 1,
-                    'modestbranding': 1 /* Removes the YouTube logo from the control bar natively */
+                    'controls': 0,          // Hides native controls
+                    'disablekb': 1,         // Disables keyboard shortcuts
+                    'modestbranding': 1,    // Removes YouTube logo
+                    'rel': 0,               // Limits suggestions
+                    'playsinline': 1        // Prevents forced fullscreen on mobile
                 },
-                events: { 
-                    'onStateChange': onPlayerStateChange 
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
                 }
             });
         }
 
+        // 3. Setup Custom Controls once player is ready
+        function onPlayerReady(event) {
+            var playPauseBtn = document.getElementById('play-pause-btn');
+            var progressBar = document.getElementById('progress-bar');
+            
+            // Set total time
+            document.getElementById('total-time').innerText = formatTime(player.getDuration());
+            progressBar.max = player.getDuration();
+
+            // Play/Pause Button Logic
+            playPauseBtn.addEventListener('click', function() {
+                var state = player.getPlayerState();
+                if (state === YT.PlayerState.PLAYING) {
+                    player.pauseVideo();
+                } else {
+                    player.playVideo();
+                }
+            });
+
+            // Seekbar Logic (User dragging the bar)
+            progressBar.addEventListener('input', function() {
+                player.seekTo(progressBar.value, true);
+            });
+        }
+
+        // 4. Handle State Changes (Updating UI based on video state)
         function onPlayerStateChange(event) {
-            // When video ends, rewind to 0 and pause
+            var playPauseBtn = document.getElementById('play-pause-btn');
+            
+            if (event.data === YT.PlayerState.PLAYING) {
+                playPauseBtn.innerText = "Pause";
+                // Start updating the progress bar every second
+                timeUpdater = setInterval(updateProgressBar, 500);
+            } else {
+                playPauseBtn.innerText = "Play";
+                clearInterval(timeUpdater);
+            }
+
+            // Reset when finished
             if (event.data === YT.PlayerState.ENDED) {
                 player.seekTo(0);
                 player.pauseVideo();
             }
+        }
+
+        // 5. Helper function to update the seekbar and timer
+        function updateProgressBar() {
+            var currentTime = player.getCurrentTime();
+            document.getElementById('progress-bar').value = currentTime;
+            document.getElementById('current-time').innerText = formatTime(currentTime);
+        }
+
+        // 6. Helper function to format seconds into M:SS
+        function formatTime(time) {
+            var minutes = Math.floor(time / 60);
+            var seconds = Math.floor(time % 60);
+            return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
         }
     </script>
 </body>
