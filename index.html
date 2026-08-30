@@ -44,7 +44,7 @@
             flex-direction: column;
         }
 
-        /* iOS CSS OVERRIDE FULLSCREEN */
+        /* iOS & KIOSK CSS OVERRIDE FULLSCREEN */
         .video-container.ios-fullscreen {
             position: fixed;
             inset: 0;
@@ -161,9 +161,7 @@
             z-index: 40;
         }
 
-        /* --- NEW: FULLSCREEN OVERLAY FIX --- */
-        /* This makes the control bar float OVER the video in fullscreen, 
-           so when it hides, there is no black strip left behind. */
+        /* FULLSCREEN OVERLAY FIX */
         .video-container:fullscreen .custom-controls,
         .video-container:-webkit-full-screen .custom-controls,
         .video-container.ios-fullscreen .custom-controls {
@@ -171,7 +169,7 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            background: rgba(24, 24, 24, 0.85); /* Slightly transparent black */
+            background: rgba(24, 24, 24, 0.85);
         }
 
         .control-btn {
@@ -362,25 +360,49 @@
                 }
             }
 
+            // --- UPDATED FULLSCREEN EXIT FUNCTION ---
             function exitFullscreen() {
                 unlockOrientation(); 
                 
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
                 
+                // Always remove the CSS fallback class
                 videoContainer.classList.remove('ios-fullscreen');
                 fullscreenBtn.innerText = "Full";
             }
 
+            // --- UPDATED FULLSCREEN BUTTON LOGIC WITH KIOSK FIX ---
             fullscreenBtn.addEventListener('click', function() {
                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
                     
-                    if (videoContainer.requestFullscreen) {
-                        videoContainer.requestFullscreen().then(lockLandscape);
-                    } else if (videoContainer.webkitRequestFullscreen) {
-                        videoContainer.webkitRequestFullscreen();
-                        lockLandscape();
-                    } else {
+                    try {
+                        if (videoContainer.requestFullscreen) {
+                            videoContainer.requestFullscreen().then(lockLandscape).catch(function(err) {
+                                // Fallback if native API fails
+                                videoContainer.classList.add('ios-fullscreen');
+                                fullscreenBtn.innerText = "Exit";
+                            });
+                        } else if (videoContainer.webkitRequestFullscreen) {
+                            videoContainer.webkitRequestFullscreen();
+                            lockLandscape();
+                            
+                            // Android WebView hack: check after 200ms if native fullscreen worked
+                            setTimeout(function() {
+                                if (!document.webkitFullscreenElement) {
+                                    videoContainer.classList.add('ios-fullscreen');
+                                    fullscreenBtn.innerText = "Exit";
+                                }
+                            }, 200);
+                        } else {
+                            // Direct CSS fallback if no API support
+                            videoContainer.classList.add('ios-fullscreen');
+                            fullscreenBtn.innerText = "Exit";
+                        }
+                    } catch (e) {
                         videoContainer.classList.add('ios-fullscreen');
                         fullscreenBtn.innerText = "Exit";
                     }
@@ -393,7 +415,7 @@
                 var isFS = document.fullscreenElement || document.webkitFullscreenElement;
                 fullscreenBtn.innerText = isFS ? "Exit" : "Full";
                 
-                if (!isFS) {
+                if (!isFS && !videoContainer.classList.contains('ios-fullscreen')) {
                     unlockOrientation();
                 }
             };
