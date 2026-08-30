@@ -6,11 +6,53 @@
     <title>Clean Video Player</title>
     <style>
         /* Centers the video and makes the background black */
-        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #000; }
+        body { 
+            margin: 0; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            background-color: #000; 
+        }
+        
+        /* Container that holds the video and the shields */
+        .video-container {
+            position: relative;
+            width: 560px;
+            height: 315px;
+        }
+
+        /* INVISIBLE SHIELD 1: Blocks the top title, channel icon, and "More videos" */
+        .shield-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 70px;
+            z-index: 10;
+        }
+
+        /* INVISIBLE SHIELD 2: Blocks the bottom-right YouTube watermark */
+        .shield-bottom-right {
+            position: absolute;
+            bottom: 30px; /* Sits just above the playbar */
+            right: 0;
+            width: 90px;
+            height: 50px;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
-    <div id="player"></div>
+    
+    <div class="video-container">
+        <!-- These empty divs act as glass walls over the clickable YouTube links -->
+        <div class="shield-top"></div>
+        <div class="shield-bottom-right"></div>
+        
+        <!-- The actual video player -->
+        <div id="player"></div>
+    </div>
 
     <script>
         var tag = document.createElement('script');
@@ -22,11 +64,12 @@
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
                 height: '315',
-                width: '560',
-                videoId: 'yWgHx0HE8m8', // Put your video ID here
+                width: '100%', 
+                videoId: 'yWgHx0HE8m8', // Your video ID is here
                 playerVars: { 
                     'rel': 0, 
-                    'playsinline': 1 
+                    'playsinline': 1,
+                    'modestbranding': 1 /* Removes the YouTube logo from the control bar natively */
                 },
                 events: { 
                     'onStateChange': onPlayerStateChange 
@@ -35,6 +78,7 @@
         }
 
         function onPlayerStateChange(event) {
+            // When video ends, rewind to 0 and pause
             if (event.data === YT.PlayerState.ENDED) {
                 player.seekTo(0);
                 player.pauseVideo();
