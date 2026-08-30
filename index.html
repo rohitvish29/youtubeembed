@@ -2,29 +2,39 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Definite Success Custom Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Definite Success Mobile Player</title>
     <style>
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body { 
             margin: 0; 
-            background-color: #111; 
+            padding: 0;
+            background-color: #000; 
             display: flex; 
             justify-content: center; 
             align-items: center; 
-            height: 100vh;
-            font-family: Arial, sans-serif;
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
         }
 
+        /* Container scales fluidly across desktop, tablet, and mobile */
         .video-container {
             position: relative;
-            width: 700px;
-            max-width: 100%;
+            width: 100%;
+            max-width: 900px;
             background: #000;
-            border-radius: 8px;
+            border-radius: 12px;
             overflow: hidden; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.7);
         }
 
+        /* Fullscreen handling for mobile & desktop */
         .video-container:fullscreen {
             width: 100vw;
             height: 100vh;
@@ -34,31 +44,76 @@
             flex-direction: column;
         }
 
-        /* --- NEW: Floating Logo Styling --- */
+        /* iOS WebKit Fullscreen support */
+        .video-container:-webkit-full-screen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            border-radius: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- BACK BUTTON (TOP-LEFT FOR iOS & ANDROID) --- */
+        .back-btn {
+            position: absolute;
+            top: max(15px, env(safe-area-inset-top));
+            left: max(15px, env(safe-area-inset-left));
+            z-index: 30;
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        .back-btn:active {
+            transform: scale(0.92);
+            background: rgba(229, 9, 20, 0.8);
+        }
+
+        .back-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: #ffffff;
+        }
+
+        /* --- FLOATING LOGO (TOP-RIGHT) --- */
         .brand-logo {
             position: absolute;
-            top: 20px;
-            right: 25px; /* Adjust this to move it left or right */
-            width: 140px; /* Adjust this to make your logo bigger or smaller */
-            opacity: 0.85; /* Makes it slightly transparent */
-            z-index: 20; /* Keeps it above the video player */
-            pointer-events: none; /* Physically prevents clicks on the logo */
-            transition: opacity 0.3s ease;
+            top: max(15px, env(safe-area-inset-top));
+            right: max(15px, env(safe-area-inset-right));
+            width: 110px;
+            max-width: 25vw;
+            opacity: 0.85;
+            z-index: 20;
+            pointer-events: none;
         }
 
+        /* Aspect ratio wrapper */
         .iframe-wrapper {
             position: relative;
-            padding-bottom: 56.25%;
+            padding-bottom: 56.25%; /* 16:9 ratio */
             height: 0;
             overflow: hidden; 
+            background: #000;
         }
 
-        .video-container:fullscreen .iframe-wrapper {
+        .video-container:fullscreen .iframe-wrapper,
+        .video-container:-webkit-full-screen .iframe-wrapper {
             flex-grow: 1;
             padding-bottom: 0;
             height: auto;
         }
 
+        /* YouTube crop & click-blocking shield */
         #player {
             position: absolute;
             top: -80px;  
@@ -68,53 +123,91 @@
             pointer-events: none; 
         }
 
+        /* Custom mobile-friendly control bar */
         .custom-controls {
             display: flex;
             align-items: center;
-            background: #222;
-            padding: 10px 15px;
-            gap: 15px;
-            z-index: 10;
+            background: #181818;
+            padding: 12px 16px;
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+            gap: 12px;
+            z-index: 25;
+            flex-wrap: wrap;
         }
 
         .control-btn {
             background: #e50914;
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
+            min-width: 44px;
+            height: 38px;
+            padding: 0 12px;
+            border-radius: 6px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .control-btn:hover {
+        .control-btn:active {
             background: #b20710;
         }
 
         .progress-bar {
             flex-grow: 1;
+            height: 6px;
             cursor: pointer;
+            accent-color: #e50914;
         }
 
         .time-display {
-            color: white;
-            font-size: 14px;
-            min-width: 80px;
+            color: #ccc;
+            font-size: 13px;
+            min-width: 75px;
             text-align: center;
+            font-variant-numeric: tabular-nums;
         }
 
         .speed-control {
-            background: #333;
+            background: #2a2a2a;
             color: white;
-            border: 1px solid #555;
-            padding: 5px 10px;
-            border-radius: 4px;
+            border: 1px solid #444;
+            height: 38px;
+            padding: 0 8px;
+            border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
+            outline: none;
         }
-        
-        .speed-control:hover {
-            background: #444;
+
+        /* Mobile specific adjustments */
+        @media (max-width: 600px) {
+            .video-container {
+                border-radius: 0;
+            }
+            .custom-controls {
+                padding: 8px 10px;
+                gap: 8px;
+            }
+            .brand-logo {
+                width: 90px;
+            }
+            .time-display {
+                font-size: 11px;
+                min-width: 65px;
+            }
+            .speed-control {
+                padding: 0 4px;
+                font-size: 12px;
+            }
+            .control-btn {
+                padding: 0 8px;
+                font-size: 13px;
+            }
         }
     </style>
 </head>
@@ -122,9 +215,13 @@
 
     <div class="video-container" id="video-container">
         
-        <!-- NEW: Your Floating Logo -->
-        <!-- Replace the src link with the actual URL of your transparent PNG logo -->
-        <img src="logo.png" alt="DSC" class="brand-logo" id="brand-logo">
+        <button class="back-btn" id="back-btn" aria-label="Exit Video">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
+            </svg>
+        </button>
+
+        <img src="my-logo.png" alt="Definite Success" class="brand-logo" id="brand-logo" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
@@ -150,6 +247,7 @@
     </div>
 
     <script>
+        // 1. YouTube API Initialization
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -166,7 +264,7 @@
                     'disablekb': 1,
                     'modestbranding': 1,
                     'rel': 0,
-                    'playsinline': 1
+                    'playsinline': 1 /* Keeps video inside web view on iPhones */
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -175,16 +273,19 @@
             });
         }
 
+        // 2. Setup Event Listeners
         function onPlayerReady(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
             var progressBar = document.getElementById('progress-bar');
             var speedControl = document.getElementById('speed-control');
             var fullscreenBtn = document.getElementById('fullscreen-btn');
+            var backBtn = document.getElementById('back-btn');
             var videoContainer = document.getElementById('video-container');
             
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
+            // Play / Pause toggle
             playPauseBtn.addEventListener('click', function() {
                 var state = player.getPlayerState();
                 if (state === YT.PlayerState.PLAYING) {
@@ -194,37 +295,63 @@
                 }
             });
 
+            // Seekbar scrub
             progressBar.addEventListener('input', function() {
                 player.seekTo(progressBar.value, true);
             });
 
+            // Speed select
             speedControl.addEventListener('change', function() {
                 player.setPlaybackRate(parseFloat(this.value));
             });
 
-            fullscreenBtn.addEventListener('click', function() {
-                if (!document.fullscreenElement) {
-                    if (videoContainer.requestFullscreen) {
-                        videoContainer.requestFullscreen();
-                    } else if (videoContainer.webkitRequestFullscreen) {
-                        videoContainer.webkitRequestFullscreen();
-                    }
-                } else {
+            // Back Button Handler (Exit/Back functionality)
+            backBtn.addEventListener('click', function() {
+                // If in fullscreen, exit fullscreen first
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
                     if (document.exitFullscreen) {
                         document.exitFullscreen();
                     } else if (document.webkitExitFullscreen) {
                         document.webkitExitFullscreen();
                     }
                 }
+                
+                // Return to previous page in browser history or close window
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.close();
+                }
             });
 
-            document.addEventListener('fullscreenchange', function() {
-                if (document.fullscreenElement) {
+            // Fullscreen cross-platform handler
+            fullscreenBtn.addEventListener('click', function() {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (videoContainer.requestFullscreen) {
+                        videoContainer.requestFullscreen();
+                    } else if (videoContainer.webkitRequestFullscreen) { /* Safari & iOS */
+                        videoContainer.webkitRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) { /* Safari & iOS */
+                        document.webkitExitFullscreen();
+                    }
+                }
+            });
+
+            // Fullscreen text updater
+            var handleFSChange = function() {
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
                     fullscreenBtn.innerText = "Exit";
                 } else {
                     fullscreenBtn.innerText = "Full";
                 }
-            });
+            };
+
+            document.addEventListener('fullscreenchange', handleFSChange);
+            document.addEventListener('webkitfullscreenchange', handleFSChange);
         }
 
         function onPlayerStateChange(event) {
