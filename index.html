@@ -15,45 +15,69 @@
             font-family: Arial, sans-serif;
         }
 
-        /* The main player container */
         .video-container {
             position: relative;
             width: 700px;
             max-width: 100%;
             background: #000;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: hidden; 
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        /* The 16:9 ratio wrapper */
-        .iframe-wrapper {
-            position: relative;
-            padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
-            height: 0;
-            overflow: hidden;
+        .video-container:fullscreen {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            border-radius: 0;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* The YouTube iframe - CRITICAL: pointer-events: none blocks ALL clicks */
+        /* --- NEW: Floating Logo Styling --- */
+        .brand-logo {
+            position: absolute;
+            top: 20px;
+            right: 25px; /* Adjust this to move it left or right */
+            width: 140px; /* Adjust this to make your logo bigger or smaller */
+            opacity: 0.85; /* Makes it slightly transparent */
+            z-index: 20; /* Keeps it above the video player */
+            pointer-events: none; /* Physically prevents clicks on the logo */
+            transition: opacity 0.3s ease;
+        }
+
+        .iframe-wrapper {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden; 
+        }
+
+        .video-container:fullscreen .iframe-wrapper {
+            flex-grow: 1;
+            padding-bottom: 0;
+            height: auto;
+        }
+
         #player {
             position: absolute;
-            top: 0;
+            top: -80px;  
             left: 0;
             width: 100%;
-            height: 100%;
+            height: calc(100% + 160px); 
             pointer-events: none; 
         }
 
-        /* Our Custom Control Bar */
         .custom-controls {
             display: flex;
             align-items: center;
             background: #222;
             padding: 10px 15px;
             gap: 15px;
+            z-index: 10;
         }
 
-        .play-btn {
+        .control-btn {
             background: #e50914;
             color: white;
             border: none;
@@ -63,11 +87,10 @@
             font-weight: bold;
         }
 
-        .play-btn:hover {
+        .control-btn:hover {
             background: #b20710;
         }
 
-        /* Custom seekbar */
         .progress-bar {
             flex-grow: 1;
             cursor: pointer;
@@ -77,30 +100,56 @@
             color: white;
             font-size: 14px;
             min-width: 80px;
-            text-align: right;
+            text-align: center;
+        }
+
+        .speed-control {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .speed-control:hover {
+            background: #444;
         }
     </style>
 </head>
 <body>
 
-    <div class="video-container">
-        <!-- Video Area (Unclickable) -->
+    <div class="video-container" id="video-container">
+        
+        <!-- NEW: Your Floating Logo -->
+        <!-- Replace the src link with the actual URL of your transparent PNG logo -->
+        <img src="https://via.placeholder.com/150x50?text=Your+Logo+Here" alt="Definite Success Classes" class="brand-logo" id="brand-logo">
+
         <div class="iframe-wrapper">
             <div id="player"></div>
         </div>
         
-        <!-- Custom Controls Area -->
         <div class="custom-controls">
-            <button id="play-pause-btn" class="play-btn">Play</button>
+            <button id="play-pause-btn" class="control-btn">Play</button>
             <input type="range" id="progress-bar" class="progress-bar" value="0" step="0.1" min="0" max="100">
             <div class="time-display">
                 <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
             </div>
+            
+            <select id="speed-control" class="speed-control">
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.25">1.25x</option>
+                <option value="1.5">1.5x</option>
+                <option value="2">2x</option>
+            </select>
+
+            <button id="fullscreen-btn" class="control-btn">Full</button>
         </div>
     </div>
 
     <script>
-        // 1. Load YouTube IFrame API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -109,16 +158,15 @@
         var player;
         var timeUpdater;
 
-        // 2. Initialize Player
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
-                videoId: 'yWgHx0HE8m8', // Your Video ID
+                videoId: 'yWgHx0HE8m8',
                 playerVars: { 
-                    'controls': 0,          // Hides native controls
-                    'disablekb': 1,         // Disables keyboard shortcuts
-                    'modestbranding': 1,    // Removes YouTube logo
-                    'rel': 0,               // Limits suggestions
-                    'playsinline': 1        // Prevents forced fullscreen on mobile
+                    'controls': 0,
+                    'disablekb': 1,
+                    'modestbranding': 1,
+                    'rel': 0,
+                    'playsinline': 1
                 },
                 events: {
                     'onReady': onPlayerReady,
@@ -127,16 +175,16 @@
             });
         }
 
-        // 3. Setup Custom Controls once player is ready
         function onPlayerReady(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
             var progressBar = document.getElementById('progress-bar');
+            var speedControl = document.getElementById('speed-control');
+            var fullscreenBtn = document.getElementById('fullscreen-btn');
+            var videoContainer = document.getElementById('video-container');
             
-            // Set total time
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
-            // Play/Pause Button Logic
             playPauseBtn.addEventListener('click', function() {
                 var state = player.getPlayerState();
                 if (state === YT.PlayerState.PLAYING) {
@@ -146,40 +194,62 @@
                 }
             });
 
-            // Seekbar Logic (User dragging the bar)
             progressBar.addEventListener('input', function() {
                 player.seekTo(progressBar.value, true);
             });
+
+            speedControl.addEventListener('change', function() {
+                player.setPlaybackRate(parseFloat(this.value));
+            });
+
+            fullscreenBtn.addEventListener('click', function() {
+                if (!document.fullscreenElement) {
+                    if (videoContainer.requestFullscreen) {
+                        videoContainer.requestFullscreen();
+                    } else if (videoContainer.webkitRequestFullscreen) {
+                        videoContainer.webkitRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
+                }
+            });
+
+            document.addEventListener('fullscreenchange', function() {
+                if (document.fullscreenElement) {
+                    fullscreenBtn.innerText = "Exit";
+                } else {
+                    fullscreenBtn.innerText = "Full";
+                }
+            });
         }
 
-        // 4. Handle State Changes (Updating UI based on video state)
         function onPlayerStateChange(event) {
             var playPauseBtn = document.getElementById('play-pause-btn');
             
             if (event.data === YT.PlayerState.PLAYING) {
                 playPauseBtn.innerText = "Pause";
-                // Start updating the progress bar every second
                 timeUpdater = setInterval(updateProgressBar, 500);
             } else {
                 playPauseBtn.innerText = "Play";
                 clearInterval(timeUpdater);
             }
 
-            // Reset when finished
             if (event.data === YT.PlayerState.ENDED) {
                 player.seekTo(0);
                 player.pauseVideo();
             }
         }
 
-        // 5. Helper function to update the seekbar and timer
         function updateProgressBar() {
             var currentTime = player.getCurrentTime();
             document.getElementById('progress-bar').value = currentTime;
             document.getElementById('current-time').innerText = formatTime(currentTime);
         }
 
-        // 6. Helper function to format seconds into M:SS
         function formatTime(time) {
             var minutes = Math.floor(time / 60);
             var seconds = Math.floor(time % 60);
