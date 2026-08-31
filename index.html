@@ -44,22 +44,26 @@
             flex-direction: column;
         }
 
-        /* iOS CSS OVERRIDE FULLSCREEN */
-        .video-container.ios-fullscreen {
+        /* KIOSK / WEBVIEW CSS OVERRIDE FULLSCREEN */
+        .video-container.kiosk-fullscreen {
             position: fixed;
-            inset: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             width: 100vw;
             height: 100dvh;
             max-width: none;
             border-radius: 0;
-            z-index: 9999;
+            z-index: 99999;
             display: flex;
             flex-direction: column;
+            background-color: #000;
         }
 
         /* iOS FORCED LANDSCAPE ROTATION FALLBACK */
         @media screen and (orientation: portrait) {
-            .video-container.ios-fullscreen {
+            .video-container.kiosk-fullscreen {
                 width: 100dvh;
                 height: 100vw;
                 transform: rotate(90deg);
@@ -68,7 +72,7 @@
             }
         }
 
-        /* UI FADE ANIMATIONS */
+        /* UI FADE ANIMATIONS (For Control Bar & Back Button) */
         .autohide-ui {
             transition: opacity 0.3s ease, visibility 0.3s ease;
         }
@@ -103,16 +107,22 @@
             fill: #ffffff;
         }
 
-        /* FLOATING LOGO */
+        /* FLOATING LOGO (Now Permanent with transparency) */
         .brand-logo {
             position: absolute;
-            /* Tweak applied here: Reduced from 15px to 5px to push it tightly into the corner */
             top: max(5px, env(safe-area-inset-top));
             right: max(5px, env(safe-area-inset-right));
             width: 110px;
             max-width: 25vw;
             z-index: 30;
             pointer-events: none;
+            opacity: 0.85; /* Normal visibility */
+            transition: opacity 0.3s ease; /* Smooth fade effect */
+        }
+        
+        /* 80% Transparent state when controls hide */
+        .brand-logo.dimmed {
+            opacity: 0.2; 
         }
 
         /* VIDEO AREA */
@@ -126,7 +136,7 @@
 
         .video-container:fullscreen .iframe-wrapper,
         .video-container:-webkit-full-screen .iframe-wrapper,
-        .video-container.ios-fullscreen .iframe-wrapper {
+        .video-container.kiosk-fullscreen .iframe-wrapper {
             flex-grow: 1;
             padding-bottom: 0;
             height: auto;
@@ -165,7 +175,7 @@
         /* FULLSCREEN OVERLAY FIX */
         .video-container:fullscreen .custom-controls,
         .video-container:-webkit-full-screen .custom-controls,
-        .video-container.ios-fullscreen .custom-controls {
+        .video-container.kiosk-fullscreen .custom-controls {
             position: absolute;
             bottom: 0;
             left: 0;
@@ -248,7 +258,7 @@
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
-        <img src="logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
+        <img src="logo.png" alt="Logo" class="brand-logo" id="brand-logo" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
@@ -284,6 +294,7 @@
         var player, timeUpdater, idleTimer;
         var isUIHidden = false; 
         var uiElements = document.querySelectorAll('.autohide-ui');
+        var brandLogo = document.getElementById('brand-logo'); // Target the logo specifically
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
@@ -335,7 +346,7 @@
             speedControl.addEventListener('change', function() { player.setPlaybackRate(parseFloat(this.value)); });
 
             backBtn.addEventListener('click', function() {
-                if (document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('ios-fullscreen')) {
+                if (document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen')) {
                     exitFullscreen();
                 }
                 
@@ -364,23 +375,42 @@
             function exitFullscreen() {
                 unlockOrientation(); 
                 
-                if (document.exitFullscreen) document.exitFullscreen();
-                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+                // Attempt native exit
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(e => console.log(e));
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
                 
-                videoContainer.classList.remove('ios-fullscreen');
+                // Always remove the CSS fallback class
+                videoContainer.classList.remove('kiosk-fullscreen');
                 fullscreenBtn.innerText = "Full";
             }
 
+            // KIOSK-SAFE FULLSCREEN LOGIC
             fullscreenBtn.addEventListener('click', function() {
-                if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
-                    
+                var isCurrentlyFullscreen = document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen');
+
+                if (!isCurrentlyFullscreen) {
+                    // Try native fullscreen first
                     if (videoContainer.requestFullscreen) {
-                        videoContainer.requestFullscreen().then(lockLandscape);
+                        videoContainer.requestFullscreen()
+                            .then(lockLandscape)
+                            .catch(function() {
+                                // If native fails (Kiosk block), force CSS fullscreen
+                                videoContainer.classList.add('kiosk-fullscreen');
+                                lockLandscape();
+                                fullscreenBtn.innerText = "Exit";
+                            });
                     } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
                         lockLandscape();
+                        // Assume success but add fallback class just in case WebKit fails silently
+                        videoContainer.classList.add('kiosk-fullscreen');
                     } else {
-                        videoContainer.classList.add('ios-fullscreen');
+                        // Native API not found at all, use CSS fallback
+                        videoContainer.classList.add('kiosk-fullscreen');
+                        lockLandscape();
                         fullscreenBtn.innerText = "Exit";
                     }
                 } else {
@@ -389,11 +419,14 @@
             });
 
             var handleFSChange = function() {
-                var isFS = document.fullscreenElement || document.webkitFullscreenElement;
-                fullscreenBtn.innerText = isFS ? "Exit" : "Full";
+                var isNativeFS = document.fullscreenElement || document.webkitFullscreenElement;
                 
-                if (!isFS) {
+                // Only change button to "Full" if we are neither in native FS NOR in CSS fallback FS
+                if (!isNativeFS && !videoContainer.classList.contains('kiosk-fullscreen')) {
+                    fullscreenBtn.innerText = "Full";
                     unlockOrientation();
+                } else {
+                    fullscreenBtn.innerText = "Exit";
                 }
             };
             
@@ -409,6 +442,7 @@
         // 3. UI Show/Hide Logic
         function showUI() {
             uiElements.forEach(el => el.classList.remove('hidden'));
+            if(brandLogo) brandLogo.classList.remove('dimmed'); // Restore full logo opacity
             isUIHidden = false;
         }
 
@@ -419,6 +453,7 @@
             if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING) {
                 idleTimer = setTimeout(() => {
                     uiElements.forEach(el => el.classList.add('hidden'));
+                    if(brandLogo) brandLogo.classList.add('dimmed'); // Apply 80% transparency to the logo
                     isUIHidden = true;
                 }, 3500); 
             }
