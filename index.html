@@ -44,7 +44,7 @@
             flex-direction: column;
         }
 
-        /* iOS & KIOSK CSS OVERRIDE FULLSCREEN */
+        /* iOS CSS OVERRIDE FULLSCREEN */
         .video-container.ios-fullscreen {
             position: fixed;
             inset: 0;
@@ -106,8 +106,9 @@
         /* FLOATING LOGO */
         .brand-logo {
             position: absolute;
-            top: max(15px, env(safe-area-inset-top));
-            right: max(15px, env(safe-area-inset-right));
+            /* Tweak applied here: Reduced from 15px to 5px to push it tightly into the corner */
+            top: max(5px, env(safe-area-inset-top));
+            right: max(5px, env(safe-area-inset-right));
             width: 110px;
             max-width: 25vw;
             z-index: 30;
@@ -169,7 +170,7 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            background: rgba(24, 24, 24, 0.85);
+            background: rgba(24, 24, 24, 0.85); 
         }
 
         .control-btn {
@@ -247,7 +248,7 @@
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
-        <img src="logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
+        <img src="my-logo.png" alt="Logo" class="brand-logo autohide-ui" onerror="this.style.display='none'">
 
         <div class="iframe-wrapper">
             <div id="player"></div>
@@ -360,49 +361,25 @@
                 }
             }
 
-            // --- UPDATED FULLSCREEN EXIT FUNCTION ---
             function exitFullscreen() {
                 unlockOrientation(); 
                 
-                if (document.fullscreenElement && document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                }
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
                 
-                // Always remove the CSS fallback class
                 videoContainer.classList.remove('ios-fullscreen');
                 fullscreenBtn.innerText = "Full";
             }
 
-            // --- UPDATED FULLSCREEN BUTTON LOGIC WITH KIOSK FIX ---
             fullscreenBtn.addEventListener('click', function() {
                 if (!document.fullscreenElement && !document.webkitFullscreenElement && !videoContainer.classList.contains('ios-fullscreen')) {
                     
-                    try {
-                        if (videoContainer.requestFullscreen) {
-                            videoContainer.requestFullscreen().then(lockLandscape).catch(function(err) {
-                                // Fallback if native API fails
-                                videoContainer.classList.add('ios-fullscreen');
-                                fullscreenBtn.innerText = "Exit";
-                            });
-                        } else if (videoContainer.webkitRequestFullscreen) {
-                            videoContainer.webkitRequestFullscreen();
-                            lockLandscape();
-                            
-                            // Android WebView hack: check after 200ms if native fullscreen worked
-                            setTimeout(function() {
-                                if (!document.webkitFullscreenElement) {
-                                    videoContainer.classList.add('ios-fullscreen');
-                                    fullscreenBtn.innerText = "Exit";
-                                }
-                            }, 200);
-                        } else {
-                            // Direct CSS fallback if no API support
-                            videoContainer.classList.add('ios-fullscreen');
-                            fullscreenBtn.innerText = "Exit";
-                        }
-                    } catch (e) {
+                    if (videoContainer.requestFullscreen) {
+                        videoContainer.requestFullscreen().then(lockLandscape);
+                    } else if (videoContainer.webkitRequestFullscreen) {
+                        videoContainer.webkitRequestFullscreen();
+                        lockLandscape();
+                    } else {
                         videoContainer.classList.add('ios-fullscreen');
                         fullscreenBtn.innerText = "Exit";
                     }
@@ -415,7 +392,7 @@
                 var isFS = document.fullscreenElement || document.webkitFullscreenElement;
                 fullscreenBtn.innerText = isFS ? "Exit" : "Full";
                 
-                if (!isFS && !videoContainer.classList.contains('ios-fullscreen')) {
+                if (!isFS) {
                     unlockOrientation();
                 }
             };
