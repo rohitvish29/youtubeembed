@@ -160,14 +160,26 @@
             pointer-events: none; 
         }
 
-        /* FULLSCREEN: SCALE SLIGHTLY TO CROP OUT YOUTUBE'S LOGO & WATERMARK */
+        /* FULLSCREEN: EXPANDED DIMENSIONS TO COMPLETELY HIDE YOUTUBE LOGO & BADGES */
         .video-container:fullscreen #player,
         .video-container:-webkit-full-screen #player,
         .video-container.kiosk-fullscreen #player {
-            top: -4%;
-            left: -4%;
-            width: 108%;
-            height: 108%;
+            top: -10%;
+            left: -7%;
+            width: 114%;
+            height: 120%;
+        }
+
+        /* BOTTOM-RIGHT SHADOW MASK OVER WATERMARK AREA */
+        .watermark-blocker {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 90px;
+            height: 55px;
+            background: transparent;
+            z-index: 22;
+            pointer-events: none;
         }
 
         /* INVISIBLE TOUCH LAYER */
@@ -327,6 +339,7 @@
         <div class="iframe-wrapper">
             <div id="player"></div>
             <div id="touch-overlay"></div>
+            <div class="watermark-blocker"></div>
 
             <!-- Double-Tap Indicators -->
             <div id="ripple-left" class="seek-ripple left">
