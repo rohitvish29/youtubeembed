@@ -64,7 +64,7 @@
             background-color: #000;
         }
 
-        /* FORCED LANDSCAPE ROTATION FALLBACK (When Device OS blocks Orientation API in Portrait) */
+        /* FORCED LANDSCAPE ROTATION FALLBACK */
         @media screen and (orientation: portrait) {
             .video-container:fullscreen.forced-landscape,
             .video-container:-webkit-full-screen.forced-landscape,
@@ -160,11 +160,14 @@
             pointer-events: none; 
         }
 
+        /* FULLSCREEN: SCALE SLIGHTLY TO CROP OUT YOUTUBE'S LOGO & WATERMARK */
         .video-container:fullscreen #player,
         .video-container:-webkit-full-screen #player,
         .video-container.kiosk-fullscreen #player {
-            top: 0;
-            height: 100%;
+            top: -4%;
+            left: -4%;
+            width: 108%;
+            height: 108%;
         }
 
         /* INVISIBLE TOUCH LAYER */
@@ -376,6 +379,8 @@
                     'modestbranding': 1,
                     'rel': 0,
                     'playsinline': 1,
+                    'iv_load_policy': 3,
+                    'fs': 0,
                     'origin': window.location.origin
                 },
                 events: {
@@ -506,22 +511,15 @@
 
             // --- ROBUST ORIENTATION LOCK & ROTATION ---
             function lockLandscape() {
-                var orientationLocked = false;
-
-                // 1. Try standard ScreenOrientation API
                 if (screen.orientation && screen.orientation.lock) {
                     screen.orientation.lock('landscape').then(function() {
-                        orientationLocked = true;
                         videoContainer.classList.remove('forced-landscape');
                     }).catch(function(err) {
                         applyFallbackLandscape();
                     });
-                } 
-                // 2. Try vendor prefixes (older Android Chrome/WebViews)
-                else if (screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation) {
+                } else if (screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation) {
                     var lockFn = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
                     if (lockFn.call(screen, 'landscape')) {
-                        orientationLocked = true;
                         videoContainer.classList.remove('forced-landscape');
                     } else {
                         applyFallbackLandscape();
@@ -532,7 +530,6 @@
             }
 
             function applyFallbackLandscape() {
-                // If device is in portrait, force 90deg CSS rotation
                 if (window.innerHeight > window.innerWidth) {
                     videoContainer.classList.add('forced-landscape');
                 } else {
@@ -551,7 +548,6 @@
                 }
             }
 
-            // Adjust fallback if user turns the physical tablet/phone while in fullscreen
             window.addEventListener('resize', function() {
                 var isFS = document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen');
                 if (isFS) {
@@ -583,7 +579,6 @@
                                             videoContainer.classList.contains('kiosk-fullscreen');
 
                 if (!isCurrentlyFullscreen) {
-                    // Lock orientation immediately in user interaction stack
                     lockLandscape();
 
                     if (videoContainer.requestFullscreen) {
