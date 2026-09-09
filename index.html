@@ -64,14 +64,19 @@
             background-color: #000;
         }
 
-        /* iOS FORCED LANDSCAPE ROTATION FALLBACK */
+        /* FORCED LANDSCAPE ROTATION FALLBACK (When Device OS blocks Orientation API in Portrait) */
         @media screen and (orientation: portrait) {
-            .video-container.kiosk-fullscreen {
-                width: 100dvh;
-                height: 100vw;
+            .video-container:fullscreen.forced-landscape,
+            .video-container:-webkit-full-screen.forced-landscape,
+            .video-container.kiosk-fullscreen.forced-landscape {
+                position: fixed !important;
+                top: 0 !important;
+                left: 100vw !important;
+                width: 100dvh !important;
+                height: 100vw !important;
                 transform: rotate(90deg);
                 transform-origin: top left;
-                left: 100vw;
+                z-index: 99999;
             }
         }
 
@@ -439,14 +444,12 @@
                 var currentTime = new Date().getTime();
                 var tapGap = currentTime - lastTapTime;
 
-                // Divide touch zone into Left (first 35%), Right (last 35%), and Middle (center 30%)
                 var side = 'middle';
                 if (clickX < width * 0.35) side = 'left';
                 else if (clickX > width * 0.65) side = 'right';
 
-                // Check for double tap on the same side within 320ms
                 if (tapGap < 320 && tapGap > 0 && lastTapSide === side && side !== 'middle') {
-                    clearTimeout(singleTapTimer); // Cancel single tap action
+                    clearTimeout(singleTapTimer);
                     singleTapTimer = null;
 
                     if (side === 'left') {
@@ -501,20 +504,64 @@
                 }
             });
 
-            // --- ORIENTATION LOCK FUNCTIONS ---
+            // --- ROBUST ORIENTATION LOCK & ROTATION ---
             function lockLandscape() {
+                var orientationLocked = false;
+
+                // 1. Try standard ScreenOrientation API
                 if (screen.orientation && screen.orientation.lock) {
-                    screen.orientation.lock('landscape').catch(function(error) {
-                        console.log("Orientation lock not supported or blocked by browser.");
+                    screen.orientation.lock('landscape').then(function() {
+                        orientationLocked = true;
+                        videoContainer.classList.remove('forced-landscape');
+                    }).catch(function(err) {
+                        applyFallbackLandscape();
                     });
+                } 
+                // 2. Try vendor prefixes (older Android Chrome/WebViews)
+                else if (screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation) {
+                    var lockFn = screen.lockOrientation || screen.mozLockOrientation || screen.msLockOrientation;
+                    if (lockFn.call(screen, 'landscape')) {
+                        orientationLocked = true;
+                        videoContainer.classList.remove('forced-landscape');
+                    } else {
+                        applyFallbackLandscape();
+                    }
+                } else {
+                    applyFallbackLandscape();
+                }
+            }
+
+            function applyFallbackLandscape() {
+                // If device is in portrait, force 90deg CSS rotation
+                if (window.innerHeight > window.innerWidth) {
+                    videoContainer.classList.add('forced-landscape');
+                } else {
+                    videoContainer.classList.remove('forced-landscape');
                 }
             }
 
             function unlockOrientation() {
+                videoContainer.classList.remove('forced-landscape');
+
                 if (screen.orientation && screen.orientation.unlock) {
-                    screen.orientation.unlock();
+                    try { screen.orientation.unlock(); } catch(e) {}
+                } else if (screen.unlockOrientation || screen.mozUnlockOrientation || screen.msUnlockOrientation) {
+                    var unlockFn = screen.unlockOrientation || screen.mozUnlockOrientation || screen.msUnlockOrientation;
+                    try { unlockFn.call(screen); } catch(e) {}
                 }
             }
+
+            // Adjust fallback if user turns the physical tablet/phone while in fullscreen
+            window.addEventListener('resize', function() {
+                var isFS = document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen');
+                if (isFS) {
+                    if (window.innerWidth >= window.innerHeight) {
+                        videoContainer.classList.remove('forced-landscape');
+                    } else {
+                        videoContainer.classList.add('forced-landscape');
+                    }
+                }
+            });
 
             function exitFullscreen() {
                 unlockOrientation(); 
@@ -529,27 +576,33 @@
                 fullscreenBtn.innerText = "Full";
             }
 
+            // FULLSCREEN TOGGLE
             fullscreenBtn.addEventListener('click', function() {
                 var isCurrentlyFullscreen = document.fullscreenElement || 
                                             document.webkitFullscreenElement || 
                                             videoContainer.classList.contains('kiosk-fullscreen');
 
                 if (!isCurrentlyFullscreen) {
+                    // Lock orientation immediately in user interaction stack
+                    lockLandscape();
+
                     if (videoContainer.requestFullscreen) {
                         videoContainer.requestFullscreen()
-                            .then(lockLandscape)
+                            .then(function() {
+                                lockLandscape();
+                            })
                             .catch(function() {
                                 videoContainer.classList.add('kiosk-fullscreen');
-                                lockLandscape();
+                                applyFallbackLandscape();
                                 fullscreenBtn.innerText = "Exit";
                             });
                     } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
-                        lockLandscape();
                         videoContainer.classList.add('kiosk-fullscreen');
+                        fullscreenBtn.innerText = "Exit";
                     } else {
                         videoContainer.classList.add('kiosk-fullscreen');
-                        lockLandscape();
+                        applyFallbackLandscape();
                         fullscreenBtn.innerText = "Exit";
                     }
                 } else {
@@ -565,6 +618,7 @@
                     unlockOrientation();
                 } else {
                     fullscreenBtn.innerText = "Exit";
+                    lockLandscape();
                 }
             };
             
