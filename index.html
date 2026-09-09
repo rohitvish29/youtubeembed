@@ -35,13 +35,16 @@
         }
 
         /* NATIVE FULLSCREEN */
-        .-container:fullscreen, .-container:-webkit-full-screen {
+        .video-container:fullscreen, 
+        .video-container:-webkit-full-screen {
             width: 100vw;
             height: 100vh;
+            height: 100dvh;
             max-width: none;
             border-radius: 0;
             display: flex;
             flex-direction: column;
+            background-color: #000;
         }
 
         /* KIOSK / WEBVIEW CSS OVERRIDE FULLSCREEN */
@@ -72,7 +75,7 @@
             }
         }
 
-        /* UI FADE ANIMATIONS (For Control Bar & Back Button) */
+        /* UI FADE ANIMATIONS */
         .autohide-ui {
             transition: opacity 0.3s ease, visibility 0.3s ease;
         }
@@ -107,7 +110,7 @@
             fill: #ffffff;
         }
 
-        /* FLOATING LOGO (Now Permanent with transparency) */
+        /* FLOATING LOGO */
         .brand-logo {
             position: absolute;
             top: max(5px, env(safe-area-inset-top));
@@ -116,11 +119,10 @@
             max-width: 25vw;
             z-index: 30;
             pointer-events: none;
-            opacity: 0.85; /* Normal visibility */
-            transition: opacity 0.3s ease; /* Smooth fade effect */
+            opacity: 0.85;
+            transition: opacity 0.3s ease;
         }
         
-        /* 80% Transparent state when controls hide */
         .brand-logo.dimmed {
             opacity: 0.2; 
         }
@@ -128,6 +130,7 @@
         /* VIDEO AREA */
         .iframe-wrapper {
             position: relative;
+            width: 100%;
             padding-bottom: 56.25%;
             height: 0;
             overflow: hidden; 
@@ -137,9 +140,10 @@
         .video-container:fullscreen .iframe-wrapper,
         .video-container:-webkit-full-screen .iframe-wrapper,
         .video-container.kiosk-fullscreen .iframe-wrapper {
-            flex-grow: 1;
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
             padding-bottom: 0;
-            height: auto;
         }
 
         #player {
@@ -151,12 +155,65 @@
             pointer-events: none; 
         }
 
+        .video-container:fullscreen #player,
+        .video-container:-webkit-full-screen #player,
+        .video-container.kiosk-fullscreen #player {
+            top: 0;
+            height: 100%;
+        }
+
         /* INVISIBLE TOUCH LAYER */
         #touch-overlay {
             position: absolute;
             inset: 0;
             z-index: 20;
             cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* DOUBLE TAP VISUAL INDICATORS */
+        .seek-ripple {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 40%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 25;
+            transition: opacity 0.25s ease-out;
+        }
+
+        .seek-ripple.left {
+            left: 0;
+            border-top-right-radius: 50% 100%;
+            border-bottom-right-radius: 50% 100%;
+        }
+
+        .seek-ripple.right {
+            right: 0;
+            border-top-left-radius: 50% 100%;
+            border-bottom-left-radius: 50% 100%;
+        }
+
+        .seek-ripple.active {
+            opacity: 1;
+        }
+
+        .seek-ripple svg {
+            width: 34px;
+            height: 34px;
+            fill: #ffffff;
+            margin-bottom: 4px;
         }
 
         /* CONTROL BAR */
@@ -172,7 +229,6 @@
             z-index: 40;
         }
 
-        /* FULLSCREEN OVERLAY FIX */
         .video-container:fullscreen .custom-controls,
         .video-container:-webkit-full-screen .custom-controls,
         .video-container.kiosk-fullscreen .custom-controls {
@@ -254,7 +310,7 @@
 
     <div class="video-container" id="video-container">
         
-        <button class="back-btn autohide-ui" id="back-btn">
+        <button class="back-btn autohide-ui" id="back-btn" aria-label="Go Back">
             <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
         </button>
 
@@ -263,6 +319,16 @@
         <div class="iframe-wrapper">
             <div id="player"></div>
             <div id="touch-overlay"></div>
+
+            <!-- Double-Tap Indicators -->
+            <div id="ripple-left" class="seek-ripple left">
+                <svg viewBox="0 0 24 24"><path d="M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z"/></svg>
+                <span>10s</span>
+            </div>
+            <div id="ripple-right" class="seek-ripple right">
+                <svg viewBox="0 0 24 24"><path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/></svg>
+                <span>10s</span>
+            </div>
         </div>
         
         <div class="custom-controls autohide-ui">
@@ -285,7 +351,7 @@
     </div>
 
     <script>
-        // 1. Load API
+        // 1. Load YouTube IFrame API
         var tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         var firstScriptTag = document.getElementsByTagName('script')[0];
@@ -294,16 +360,23 @@
         var player, timeUpdater, idleTimer;
         var isUIHidden = false; 
         var uiElements = document.querySelectorAll('.autohide-ui');
-        var brandLogo = document.getElementById('brand-logo'); // Target the logo specifically
+        var brandLogo = document.getElementById('brand-logo');
 
         function onYouTubeIframeAPIReady() {
             player = new YT.Player('player', {
                 videoId: 'gHEIN8OWOUg',
                 playerVars: { 
-                    'controls': 0, 'disablekb': 1, 'modestbranding': 1, 'rel': 0, 'playsinline': 1,
+                    'controls': 0,
+                    'disablekb': 1,
+                    'modestbranding': 1,
+                    'rel': 0,
+                    'playsinline': 1,
                     'origin': window.location.origin
                 },
-                events: { 'onReady': onPlayerReady, 'onStateChange': onPlayerStateChange }
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
             });
         }
 
@@ -317,6 +390,10 @@
             var backBtn = document.getElementById('back-btn');
             var videoContainer = document.getElementById('video-container');
             
+            var rippleLeft = document.getElementById('ripple-left');
+            var rippleRight = document.getElementById('ripple-right');
+            var rippleLeftTimeout, rippleRightTimeout;
+
             document.getElementById('total-time').innerText = formatTime(player.getDuration());
             progressBar.max = player.getDuration();
 
@@ -330,20 +407,87 @@
                 }
             }
 
-            playPauseBtn.addEventListener('click', togglePlay);
-            
-            touchOverlay.addEventListener('click', function() {
-                if (isUIHidden) {
-                    showUI();
-                    resetIdleTimer();
+            function seekRelative(seconds) {
+                if (!player || typeof player.getCurrentTime !== 'function') return;
+                var newTime = Math.max(0, Math.min(player.getDuration(), player.getCurrentTime() + seconds));
+                player.seekTo(newTime, true);
+                progressBar.value = newTime;
+                document.getElementById('current-time').innerText = formatTime(newTime);
+            }
+
+            function showRipple(side) {
+                if (side === 'left') {
+                    rippleLeft.classList.add('active');
+                    clearTimeout(rippleLeftTimeout);
+                    rippleLeftTimeout = setTimeout(() => rippleLeft.classList.remove('active'), 500);
                 } else {
-                    togglePlay();
+                    rippleRight.classList.add('active');
+                    clearTimeout(rippleRightTimeout);
+                    rippleRightTimeout = setTimeout(() => rippleRight.classList.remove('active'), 500);
+                }
+            }
+
+            // --- DOUBLE-TAP / SINGLE-TAP DETECTION ---
+            var lastTapTime = 0;
+            var lastTapSide = null;
+            var singleTapTimer = null;
+
+            touchOverlay.addEventListener('click', function(e) {
+                var rect = touchOverlay.getBoundingClientRect();
+                var clickX = e.clientX - rect.left;
+                var width = rect.width;
+                var currentTime = new Date().getTime();
+                var tapGap = currentTime - lastTapTime;
+
+                // Divide touch zone into Left (first 35%), Right (last 35%), and Middle (center 30%)
+                var side = 'middle';
+                if (clickX < width * 0.35) side = 'left';
+                else if (clickX > width * 0.65) side = 'right';
+
+                // Check for double tap on the same side within 320ms
+                if (tapGap < 320 && tapGap > 0 && lastTapSide === side && side !== 'middle') {
+                    clearTimeout(singleTapTimer); // Cancel single tap action
+                    singleTapTimer = null;
+
+                    if (side === 'left') {
+                        seekRelative(-10);
+                        showRipple('left');
+                    } else if (side === 'right') {
+                        seekRelative(10);
+                        showRipple('right');
+                    }
+
                     resetIdleTimer();
+                    lastTapTime = 0;
+                    lastTapSide = null;
+                } else {
+                    lastTapTime = currentTime;
+                    lastTapSide = side;
+
+                    clearTimeout(singleTapTimer);
+                    singleTapTimer = setTimeout(function() {
+                        if (isUIHidden) {
+                            showUI();
+                            resetIdleTimer();
+                        } else {
+                            togglePlay();
+                            resetIdleTimer();
+                        }
+                        lastTapTime = 0;
+                        lastTapSide = null;
+                    }, 300);
                 }
             });
 
-            progressBar.addEventListener('input', function() { player.seekTo(progressBar.value, true); });
-            speedControl.addEventListener('change', function() { player.setPlaybackRate(parseFloat(this.value)); });
+            playPauseBtn.addEventListener('click', togglePlay);
+
+            progressBar.addEventListener('input', function() {
+                player.seekTo(progressBar.value, true);
+            });
+
+            speedControl.addEventListener('change', function() {
+                player.setPlaybackRate(parseFloat(this.value));
+            });
 
             backBtn.addEventListener('click', function() {
                 if (document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen')) {
@@ -375,29 +519,26 @@
             function exitFullscreen() {
                 unlockOrientation(); 
                 
-                // Attempt native exit
                 if (document.exitFullscreen) {
                     document.exitFullscreen().catch(e => console.log(e));
                 } else if (document.webkitExitFullscreen) {
                     document.webkitExitFullscreen();
                 }
                 
-                // Always remove the CSS fallback class
                 videoContainer.classList.remove('kiosk-fullscreen');
                 fullscreenBtn.innerText = "Full";
             }
 
-            // KIOSK-SAFE FULLSCREEN LOGIC
             fullscreenBtn.addEventListener('click', function() {
-                var isCurrentlyFullscreen = document.fullscreenElement || document.webkitFullscreenElement || videoContainer.classList.contains('kiosk-fullscreen');
+                var isCurrentlyFullscreen = document.fullscreenElement || 
+                                            document.webkitFullscreenElement || 
+                                            videoContainer.classList.contains('kiosk-fullscreen');
 
                 if (!isCurrentlyFullscreen) {
-                    // Try native fullscreen first
                     if (videoContainer.requestFullscreen) {
                         videoContainer.requestFullscreen()
                             .then(lockLandscape)
                             .catch(function() {
-                                // If native fails (Kiosk block), force CSS fullscreen
                                 videoContainer.classList.add('kiosk-fullscreen');
                                 lockLandscape();
                                 fullscreenBtn.innerText = "Exit";
@@ -405,10 +546,8 @@
                     } else if (videoContainer.webkitRequestFullscreen) {
                         videoContainer.webkitRequestFullscreen();
                         lockLandscape();
-                        // Assume success but add fallback class just in case WebKit fails silently
                         videoContainer.classList.add('kiosk-fullscreen');
                     } else {
-                        // Native API not found at all, use CSS fallback
                         videoContainer.classList.add('kiosk-fullscreen');
                         lockLandscape();
                         fullscreenBtn.innerText = "Exit";
@@ -421,7 +560,6 @@
             var handleFSChange = function() {
                 var isNativeFS = document.fullscreenElement || document.webkitFullscreenElement;
                 
-                // Only change button to "Full" if we are neither in native FS NOR in CSS fallback FS
                 if (!isNativeFS && !videoContainer.classList.contains('kiosk-fullscreen')) {
                     fullscreenBtn.innerText = "Full";
                     unlockOrientation();
@@ -442,7 +580,7 @@
         // 3. UI Show/Hide Logic
         function showUI() {
             uiElements.forEach(el => el.classList.remove('hidden'));
-            if(brandLogo) brandLogo.classList.remove('dimmed'); // Restore full logo opacity
+            if (brandLogo) brandLogo.classList.remove('dimmed');
             isUIHidden = false;
         }
 
@@ -453,7 +591,7 @@
             if (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === YT.PlayerState.PLAYING) {
                 idleTimer = setTimeout(() => {
                     uiElements.forEach(el => el.classList.add('hidden'));
-                    if(brandLogo) brandLogo.classList.add('dimmed'); // Apply 80% transparency to the logo
+                    if (brandLogo) brandLogo.classList.add('dimmed');
                     isUIHidden = true;
                 }, 3500); 
             }
